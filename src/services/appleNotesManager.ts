@@ -1,5 +1,5 @@
 import type { Note } from '@/types.js';
-import { runAppleScript } from '@/utils/applescript.js';
+import { escapeAppleScriptString, runAppleScript } from '@/utils/applescript.js';
 
 /**
  * Formats note content for AppleScript compatibility
@@ -9,17 +9,13 @@ import { runAppleScript } from '@/utils/applescript.js';
 const formatContent = (content: string): string => {
   if (!content) return '';
 
-  // Define replacement patterns for text formatting
-  const replacements: [string, RegExp][] = [
-    ['\n', /\n/g],
-    ['\t', /\t/g],
-    ['"', /"/g], // Escape quotes for AppleScript
-  ];
+  const HTML_SAFE_TAB = '&emsp;';
 
-  return replacements.reduce(
-    (text, [char, pattern]) => text.replace(pattern, char === '"' ? '\\"' : '<br>'),
-    content
-  );
+  const htmlLike = content
+    .replace(/\r\n|\r|\n/g, '<br>')
+    .replace(/\t/g, HTML_SAFE_TAB);
+
+  return escapeAppleScriptString(htmlLike);
 };
 
 export class AppleNotesManager {
@@ -33,11 +29,12 @@ export class AppleNotesManager {
    * @returns The created note object or null if creation fails
    */
   createNote(title: string, content: string, tags: string[] = []): Note | null {
+    const safeTitle = escapeAppleScriptString(title);
     const formattedContent = formatContent(content);
     const script = `
       tell application "Notes"
         tell account "${this.ICLOUD_ACCOUNT}"
-          make new note with properties {name:"${title}", body:"${formattedContent}"}
+          make new note with properties {name:"${safeTitle}", body:"${formattedContent}"}
         end tell
       end tell
     `;
@@ -64,7 +61,7 @@ export class AppleNotesManager {
    * @returns Array of matching notes
    */
   searchNotes(query: string): Note[] {
-    const sanitizedQuery = query.replace(/"/g, '\\"');
+    const sanitizedQuery = escapeAppleScriptString(query);
     const script = `
       tell application "Notes"
         tell account "${this.ICLOUD_ACCOUNT}"
@@ -98,7 +95,7 @@ export class AppleNotesManager {
    * @returns The note content or empty string if not found
    */
   getNoteContent(title: string): string {
-    const sanitizedTitle = title.replace(/"/g, '\\"');
+    const sanitizedTitle = escapeAppleScriptString(title);
     const script = `
       tell application "Notes"
         tell account "${this.ICLOUD_ACCOUNT}"
